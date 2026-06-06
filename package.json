@@ -1,0 +1,39 @@
+{
+  "name": "@tripod311/lagoon",
+  "version": "0.0.0",
+  "description": "Safe script execution context for browser and node",
+  "keywords": [
+    "ts"
+  ],
+  "license": "MIT",
+  "author": "Tripod ind.tripod@gmail.com",
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/common.js",
+    "./browser": "./dist/browser/lagoon.js",
+    "./node": "./dist/node/lagoon.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "bundle": "node ./create_bundles.js",
+    "build": "npm run bundle && tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tripod311/lagoon.git"
+  },
+  "dependencies": {
+    "@tripod311/pump": "^0.0.2"
+  }
+}
