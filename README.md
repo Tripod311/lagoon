@@ -207,7 +207,7 @@ These methods are only available from the main environment.
 
 ---
 
-## `lagoon.execute(code, args, timeout?)`
+### `lagoon.execute(code, args, timeout?)`
 
 ```ts
 await lagoon.execute(code, args, timeout);
@@ -231,7 +231,7 @@ await lagoon.execute(`
 });
 ```
 
-### Signature
+#### Signature
 
 ```ts
 lagoon.execute(
@@ -247,7 +247,7 @@ If `timeout` is greater than zero and the function does not finish in time, exec
 
 ---
 
-## `lagoon.registerFunction(name, code)`
+### `lagoon.registerFunction(name, code)`
 
 ```ts
 await lagoon.registerFunction("increment", `
@@ -260,7 +260,7 @@ Compiles and stores a function inside the isolated environment.
 
 Use this when the same function needs to be executed many times.
 
-### Signature
+#### Signature
 
 ```ts
 lagoon.registerFunction(
@@ -273,7 +273,7 @@ If compilation fails, the returned promise is rejected.
 
 ---
 
-## `lagoon.run(name, args, timeout?)`
+### `lagoon.run(name, args, timeout?)`
 
 ```ts
 await lagoon.run("increment", {
@@ -283,7 +283,7 @@ await lagoon.run("increment", {
 
 Runs a previously registered function.
 
-### Signature
+#### Signature
 
 ```ts
 lagoon.run(
@@ -297,7 +297,7 @@ If the function throws, times out, or cannot be executed, the returned promise i
 
 ---
 
-## `lagoon.runMany(list, policy?, timeout?)`
+### `lagoon.runMany(list, policy?, timeout?)`
 
 ```ts
 const errors = await lagoon.runMany([
@@ -325,7 +325,7 @@ If execution fails, all state changes from the batch are reverted.
 - `"strict"` is the default policy. Execution stops after the first function that throws an error, and the whole batch fails.
 - `"loose"` continues executing the remaining functions even if one of them throws. Promise will return array with errors occured.
 
-### Signature
+#### Signature
 
 ```ts
 lagoon.runMany(
@@ -378,13 +378,13 @@ These APIs are available both in the main environment and inside the isolated en
 
 ---
 
-## `lagoon.ship(name, payload, callback?, timeout?)`
+### `lagoon.ship(name, payload, callback?, timeout?)`
 
 `ship` is an additional communication channel that is independent from the main execution chain.
 
 It can be used to request data, call controlled host-side services, or send messages between the main and isolated environments.
 
-### Promise style
+#### Promise style
 
 Inside the isolated environment:
 
@@ -396,7 +396,7 @@ const response = await Lagoon.ship("getSomeAsyncData", {
 
 When used with `await`, function execution pauses until a response is received.
 
-### Callback style
+#### Callback style
 
 ```ts
 Lagoon.ship("makeSomeLongRequest", { id }, (response: any) => {
@@ -412,7 +412,7 @@ The callback version does not block the current function.
 
 The callback is added to the execution queue and will run later as a regular queued function with the current synchronized state.
 
-### Signature
+#### Signature
 
 ```ts
 lagoon.ship(
@@ -425,7 +425,7 @@ lagoon.ship(
 
 ---
 
-## `lagoon.setShipListener(name, listener)`
+### `lagoon.setShipListener(name, listener)`
 
 Registers a handler for a `ship` message.
 
@@ -440,7 +440,7 @@ lagoon.setShipListener("getItemById", async (payload) => {
 });
 ```
 
-### Signature
+#### Signature
 
 ```ts
 lagoon.setShipListener(
@@ -502,12 +502,14 @@ await lagoon.registerFunction("damagePlayer", `
 
 lagoon.state.set("player.hp", 100);
 
-const result = await lagoon.run("damagePlayer", {
-  damage: 25,
-});
+try {
+  await lagoon.run("damagePlayer", {
+    damage: 25,
+  });
 
-if (!result.error) {
   console.log(lagoon.state.get("player.hp")); // 75
+} catch (err: any) {
+  console.log(`Execution error: ${err.toString()}`);
 }
 ```
 
