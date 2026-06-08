@@ -19,8 +19,10 @@ class NodeWorker extends LagoonWorker {
 			}
 		});
 
-		parentPort!.on("message", (msg: any) => {
-			this.messageBus.receive(msg);
+		parentPort!.on("message", (data: any) => {
+			// console.log(`WORKER IN: ${JSON.stringify(data)}`);
+
+			this.messageBus.receive(data);
 		});
 	}
 
@@ -53,7 +55,11 @@ class NodeWorker extends LagoonWorker {
 	setup (): void {
 		this.state = State.build(workerData);
 
-		this.messageBus = new MessageBus(randomUUID, parentPort!.postMessage.bind(parentPort));
+		this.messageBus = new MessageBus(randomUUID, (data: any) => {
+			// console.log(`WORKER OUT: ${JSON.stringify(data)}`);
+
+			parentPort!.postMessage(data);
+		});
 
 		this.attachMessageBusHandles();
 	}

@@ -24,9 +24,9 @@ export default class NodeLagoon extends Lagoon {
 
 		if (resourceLimits) {
 			this.resourceLimits = resourceLimits;
-			this.destroyWorker();
-			this.createWorker();
 		}
+
+		this.createWorker();
 	}
 
 	createWorker (): void {
@@ -35,14 +35,31 @@ export default class NodeLagoon extends Lagoon {
 			resourceLimits: this.resourceLimits,
 			workerData: this.state.serialize()
 		});
-		this.worker.on("message", this.messageBus.receive.bind(this.messageBus));
+		this.worker.on("error", this.workerError.bind(this));
 
-		this.messageBus = new MessageBus(randomUUID, this.worker.postMessage.bind(this.worker));
+		this.messageBus = new MessageBus(randomUUID, (data: any) => {
+			// console.log(`MAIN OUT: ${JSON.stringify(data)}`);
+
+			this.worker.postMessage(data);
+		});
+
+		this.worker.on("message", (data: any) => {
+			// console.log(`MAIN IN: ${JSON.stringify(data)}`);
+
+			this.messageBus.receive(data);
+		});
 
 		this.attachMessageBusHandles();
 	}
 
 	destroyWorker (): void {
 		this.worker.terminate();
+	}
+
+	private workerError (err: any) {
+		console.log(`Worker error: ${err.toString()}`);
+
+		this.destroyWorker();
+		this.createWorker();
 	}
 }

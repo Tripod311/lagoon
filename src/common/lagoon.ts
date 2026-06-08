@@ -17,9 +17,7 @@ export default abstract class Lagoon {
 	constructor (pingTimeout: number = 500) {
 		this.pingTimeout = pingTimeout;
 
-		this.state = new State();
-
-		this.createWorker();
+		this.state = new State(true);
 	}
 
 	destructor () {
@@ -148,25 +146,25 @@ export default abstract class Lagoon {
 
 				this.pendingExecutions.delete(runId);
 
-				const correction = this.state.applyPatch(msg.data.patch, true);
+				const correction = this.state.applyPatch(msg.data.patch);
 
 				msg.response!({
 					error: false,
-					data: correction
+					patch: correction
 				});
 			} else {
 				msg.response!({
 					error: true,
 					details: "Run not found",
-					data: this.state.getPatch(true)
+					patch: this.state.getPatch()
 				});
 			}
 		} else {
-			const correction = this.state.applyPatch(msg.data.patch, true);
+			const correction = this.state.applyPatch(msg.data.patch);
 
 			msg.response!({
 				error: false,
-				data: correction
+				patch: correction
 			});
 		}
 	}

@@ -8,12 +8,14 @@ interface StateEntry {
 }
 
 export default class State {
+	private isMainState: boolean;
 	private value: Pump;
 	private diff: Record<string, { old: any; current: any; }> = {};
 	private fieldListeners: Record<string, PipeListener[]> = {};
 	private locked: boolean = false;
 
-	constructor () {
+	constructor (isMainState: boolean) {
+		this.isMainState = isMainState;
 		this.value = new Pump();
 	}
 
@@ -80,6 +82,8 @@ export default class State {
 	}
 
 	addFieldListener (fieldName: string, listener: PipeListener) {
+		if (!this.isMainState) throw new Error(`Field listeners can be set only in main process`);
+
 		if (!this.fieldListeners[fieldName]) {
 			this.fieldListeners[fieldName] = [];
 		}
@@ -88,6 +92,8 @@ export default class State {
 	}
 
 	removeFieldListener (fieldName: string, listener: PipeListener) {
+		if (!this.isMainState) throw new Error(`Field listeners can be set only in main process`);
+		
 		if (this.fieldListeners[fieldName] !== undefined) {
 			this.fieldListeners[fieldName] = this.fieldListeners[fieldName].filter(l => l !== listener);
 
@@ -107,28 +113,36 @@ export default class State {
 		this.locked = false;
 	}
 
-	getPatch (clearDiff: boolean) {
+	getPatch () {
 		const result: Record<string, any> = {};
 
 		for (const fieldName in this.diff) {
-			result[fieldName] = this.diff.current;
+			result[fieldName] = this.diff[fieldName].current;
 		}
 
-		if (clearDiff) this.diff = {};
+		if (this.isMainState) this.diff = {};
 
 		return result;
 	}
 
-	applyPatch (patch: Record<string, any>, mainState: boolean = false): Record<string, any> {
+	applyPatch (patch: Record<string, any>): Record<string, any> {
 		const correction: Record<string, any> = {};
 
 		this.locked = true;
 
-		for (const fieldName in patch) {
-			if (this.diff[fieldName] !== undefined && mainState) {
-				correction[fieldName] = this.diff[fieldName].current;
-			} else {
-				this.set(fieldName, patch[fieldName]);
+		if (this.isMainState) {
+			const changedFields = Object.keys(this.diff).concat(Object.keys(patch));
+
+			for (const field of changedFields) {
+				if (this.diff[field]) {
+					correction[field] = this.diff[field].current;
+				} else {
+					this.set(field, patch[field]);
+				}
+			}
+		} else {
+			for (const field in patch) {
+				this.set(field, patch[field]);
 			}
 		}
 
@@ -140,7 +154,7 @@ export default class State {
 	}
 
 	static build (base: Record<string, StateEntry>): State {
-		const result = new State();
+		const result = new State(false);
 
 		const fill = (path: string[], entry: StateEntry) => {
 			if (entry.__value !== undefined) result.set(path.join('.'), entry.__value);

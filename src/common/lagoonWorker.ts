@@ -235,18 +235,18 @@ export default abstract class LagoonWorker {
 		}
 	}
 
-	private patchSync (runId?: string): Promise<void> {
+	protected patchSync (runId?: string): Promise<void> {
 		return new Promise((resolve) => {
 			this.messageBus.send("patch", {
 				runId: runId,
-				patch: this.state.getPatch(false)
+				patch: this.state.getPatch()
 			}, 0, (response: Message) => {
 				if (response.data.error) {
 					this.state.reset();
 
 					this.state.applyPatch(response.data.patch);
 				} else {
-					this.state.applyPatch(response.data.patch, false);
+					this.state.applyPatch(response.data.patch);
 				}
 
 				resolve();

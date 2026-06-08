@@ -7,6 +7,12 @@ export default class BrowserLagoon extends Lagoon {
 	private iframe!: HTMLIFrameElement;
 	private token: string = "";
 
+	constructor (pingTimeout?: number) {
+		super(pingTimeout);
+
+		this.createWorker();
+	}
+
 	createWorker (): void {
 		this.token = crypto.randomUUID();
 		this.iframe = document.createElement("iframe");

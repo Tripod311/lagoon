@@ -56,6 +56,8 @@ class BrowserWorker extends LagoonWorker {
 		this.messageBus = new MessageBus(crypto.randomUUID, this.sendMessage);
 
 		this.attachMessageBusHandles();
+
+		this.patchSync();
 	}
 
 	private sendMessage = (msg: any) => {
