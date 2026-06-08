@@ -5,6 +5,7 @@ import State from "./state.js"
 type ShipListener = (payload: any) => Promise<void> | void;
 
 export default abstract class Lagoon {
+	private destroyed: boolean = false;
 	public state: State;
 	protected messageBus!: MessageBus;
 
@@ -21,9 +22,11 @@ export default abstract class Lagoon {
 	}
 
 	destructor () {
-		this.messageBus.destructor();
+		this.destroyed = true;
 
 		clearTimeout(this.pingTimeoutId);
+
+		this.messageBus.destructor();
 
 		this.destroyWorker();
 	}
@@ -172,16 +175,18 @@ export default abstract class Lagoon {
 	sendPing () {
 		if (this.pingTimeout > 0) {
 			this.messageBus.send("ping", {}, this.pingTimeout, (response: Message) => {
-				if (response.data.error) {
-					console.log("Lagoon worker timeout. Restarting");
+				if (response.data && response.data.error) {
+					if (!this.destroyed) {
+						console.log("Lagoon worker timeout. Restarting");
 
-					this.pendingExecutions.clear();
+						this.pendingExecutions.clear();
 
-					this.destroyWorker();
-					this.createWorker();
+						this.destroyWorker();
+						this.createWorker();
+					}
+				} else {
+					this.pingTimeoutId = setTimeout(this.sendPing.bind(this), this.pingTimeout);
 				}
-
-				this.pingTimeoutId = setTimeout(this.sendPing.bind(this), this.pingTimeout);
 			})
 		}
 	}

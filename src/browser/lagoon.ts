@@ -31,9 +31,13 @@ export default class BrowserLagoon extends Lagoon {
 		window.addEventListener("message", this.handleMessage);
 
 		this.sync();
+
+		this.sendPing();
 	}
 
 	destroyWorker (): void {
+		this.messageBus.destructor();
+		
 		window.removeEventListener("message", this.handleMessage);
 	    this.iframe.remove();
 	    this.token = "";

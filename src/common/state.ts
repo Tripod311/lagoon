@@ -105,7 +105,7 @@ export default class State {
 		this.locked = true;
 
 		for (const fieldName in this.diff) {
-			this.set(fieldName, this.diff.old);
+			this.set(fieldName, this.diff[fieldName].old);
 		}
 
 		this.diff = {};

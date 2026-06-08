@@ -28,8 +28,21 @@ export default class MessageBus extends Emitter {
 	}
 
 	destructor () {
-		for (const waiter of Object.values(this.pending)) {
+		const waiters = Object.values(this.pending);
+		this.pending = {};
+
+		for (const waiter of waiters) {
 			clearTimeout(waiter.timeout);
+
+			waiter.handler({
+				command: "shutdown",
+				data: {
+					error: true,
+					details: "Closed"
+				},
+				reqId: "",
+				isResponse: true
+			});
 		}
 	}
 
@@ -43,17 +56,18 @@ export default class MessageBus extends Emitter {
 
 			if (timeout > 0) {
 				this.pending[id].timeout = setTimeout(() => {
-					this.pending[id].handler({
+					const handler = this.pending[id].handler;
+					delete this.pending[id];
+
+					handler({
 						command: command,
 						data: {
 							error: true,
-							details: "Timed out"
+							details: "Timeout"
 						},
 						reqId: id,
 						isResponse: true
 					});
-
-					delete this.pending[id];
 				}, timeout);
 			}
 		}
@@ -82,9 +96,10 @@ export default class MessageBus extends Emitter {
 			if (this.pending[msg.reqId]) {
 				clearTimeout(this.pending[msg.reqId].timeout);
 
-				this.pending[msg.reqId].handler(msg);
-
+				const handler = this.pending[msg.reqId].handler;
 				delete this.pending[msg.reqId];
+
+				handler(msg);
 			}
 		} else {
 			msg.response = this.response.bind(this, msg);

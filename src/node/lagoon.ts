@@ -50,9 +50,13 @@ export default class NodeLagoon extends Lagoon {
 		});
 
 		this.attachMessageBusHandles();
+
+		this.sendPing();
 	}
 
 	destroyWorker (): void {
+		this.messageBus.destructor();
+
 		this.worker.terminate();
 	}
 

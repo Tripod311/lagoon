@@ -24,10 +24,6 @@ export default abstract class LagoonWorker {
 	private processing: boolean = false;
 	private queue: QueuedCall[] = [];
 
-	constructor () {
-		this.setup();
-	}
-
 	attachMessageBusHandles () {
 		this.messageBus.addEventListener("ping", this.ping.bind(this));
 		this.messageBus.addEventListener("sync", this.sync.bind(this));

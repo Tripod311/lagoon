@@ -3,29 +3,13 @@ import type { CompiledFunction } from "../common/lagoonWorker.js"
 import MessageBus from "../common/messageBus.js"
 import State from "../common/state.js"
 
-delete (window as any).fetch;
-delete (window as any).XMLHttpRequest;
-delete (window as any).WebSocket;
-delete (window as any).EventSource;
-delete (window as any).Worker;
-delete (window as any).SharedWorker;
-delete (window as any).ServiceWorker;
-delete (window as any).BroadcastChannel;
-delete (window as any).MessageChannel;
-delete (window as any).Notification;
-delete (window as any).indexedDB;
-delete (window as any).localStorage;
-delete (window as any).sessionStorage;
-delete (window as any).open;
-delete (window as any).alert;
-delete (window as any).confirm;
-delete (window as any).prompt;
-
 class BrowserWorker extends LagoonWorker {
 	constructor () {
 		super();
 
 		window.addEventListener("message", this.handleMessage);
+
+		this.setup();
 	}
 
 	compile (name: string, code: string): CompiledFunction {
@@ -77,3 +61,23 @@ class BrowserWorker extends LagoonWorker {
 }
 
 new BrowserWorker();
+
+delete (window as any).fetch;
+delete (window as any).XMLHttpRequest;
+delete (window as any).WebSocket;
+delete (window as any).EventSource;
+delete (window as any).Worker;
+delete (window as any).SharedWorker;
+delete (window as any).ServiceWorker;
+delete (window as any).BroadcastChannel;
+delete (window as any).MessageChannel;
+delete (window as any).Notification;
+delete (window as any).indexedDB;
+delete (window as any).localStorage;
+delete (window as any).sessionStorage;
+delete (window as any).open;
+delete (window as any).alert;
+delete (window as any).confirm;
+delete (window as any).prompt;
+delete (window as any).postMessage;
+delete (window as any).parent;

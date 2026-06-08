@@ -12,6 +12,8 @@ class NodeWorker extends LagoonWorker {
 	constructor () {
 		super();
 
+		this.setup();
+
 		this.context = vm.createContext({
 			Lagoon: {
 				state: this.state,
