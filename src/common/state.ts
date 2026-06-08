@@ -58,30 +58,6 @@ export default class State {
 		}
 	}
 
-	commit (): Record<string, any> {
-		const result: Record<string, any> = {};
-		
-		for (const fieldName in this.diff) {
-			result[fieldName] = this.diff[fieldName].current;
-		}
-
-		this.diff = {};
-
-		return result;
-	}
-
-	reset () {
-		this.locked = true;
-
-		for (const fieldName in this.diff) {
-			this.set(fieldName, this.diff.old);
-		}
-
-		this.diff = {};
-
-		this.locked = false;
-	}
-
 	handleFieldChange (fieldName: string, newOutput: any, oldOutput: any) {
 		if (this.locked) return;
 		
@@ -119,18 +95,48 @@ export default class State {
 		}
 	}
 
-	applyDiff (diff: Record<string, any>) {
+	reset () {
 		this.locked = true;
 
-		for (const fieldName in diff) {
-			this.set(fieldName, diff[fieldName]);
+		for (const fieldName in this.diff) {
+			this.set(fieldName, this.diff.old);
+		}
 
-			if (this.diff[fieldName]) {
-				delete this.diff[fieldName];
+		this.diff = {};
+
+		this.locked = false;
+	}
+
+	getPatch (clearDiff: boolean) {
+		const result: Record<string, any> = {};
+
+		for (const fieldName in this.diff) {
+			result[fieldName] = this.diff.current;
+		}
+
+		if (clearDiff) this.diff = {};
+
+		return result;
+	}
+
+	applyPatch (patch: Record<string, any>, mainState: boolean = false): Record<string, any> {
+		const correction: Record<string, any> = {};
+
+		this.locked = true;
+
+		for (const fieldName in patch) {
+			if (this.diff[fieldName] !== undefined && mainState) {
+				correction[fieldName] = this.diff[fieldName].current;
+			} else {
+				this.set(fieldName, patch[fieldName]);
 			}
 		}
 
+		this.diff = {};
+
 		this.locked = false;
+
+		return correction;
 	}
 
 	static build (base: Record<string, StateEntry>): State {
