@@ -16,6 +16,7 @@ interface QueuedCall {
 
 export default abstract class LagoonWorker {
 	public state!: State;
+	public storage: Record<string, any> = {};
 	protected messageBus!: MessageBus;
 
 	protected compiledFunctions: Record<string, CompiledFunction> = {};
@@ -23,6 +24,9 @@ export default abstract class LagoonWorker {
 
 	private processing: boolean = false;
 	private queue: QueuedCall[] = [];
+
+	protected beforeEach: string = "";
+	protected afterEach: string = "";
 
 	attachMessageBusHandles () {
 		this.messageBus.addEventListener("ping", this.ping.bind(this));
@@ -55,7 +59,7 @@ export default abstract class LagoonWorker {
 
 	registerFunction (msg: Message) {
 		try {
-			this.compiledFunctions[msg.data.name] = this.compile(msg.data.name, msg.data.code);
+			this.compiledFunctions[msg.data.name] = this.compile(msg.data.name, `${this.beforeEach}\n${msg.data.code}\n${this.afterEach}`);
 
 			msg.response!({
 				error: false
@@ -74,7 +78,7 @@ export default abstract class LagoonWorker {
 		let compiled;
 
 		try {
-			compiled = this.compile("generic", msg.data.code);
+			compiled = this.compile("generic", `${this.beforeEach}\n${msg.data.code}\n${this.afterEach}`);
 		} catch (err: any) {
 			msg.response!({
 				error: true,

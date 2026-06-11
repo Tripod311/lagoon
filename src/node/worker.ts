@@ -55,7 +55,14 @@ class NodeWorker extends LagoonWorker {
 	}
 
 	setup (): void {
-		this.state = State.build(workerData);
+		this.state = State.build(workerData.state);
+
+		this.beforeEach = workerData.beforeEach || "";
+		this.afterEach = workerData.afterEach || "";
+
+		for (const name in workerData.registeredFunctions) {
+			this.compiledFunctions[name] = this.compile(name, `${this.beforeEach}\n${workerData.registeredFunctions[name]}\n${this.afterEach}`);
+		}
 
 		this.messageBus = new MessageBus(randomUUID, (data: any) => {
 			// console.log(`WORKER OUT: ${JSON.stringify(data)}`);

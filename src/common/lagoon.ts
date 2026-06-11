@@ -15,8 +15,14 @@ export default abstract class Lagoon {
 	private pendingExecutions: Set<string> = new Set();
 	private shipListeners: Record<string, ShipListener> = {};
 
-	constructor (pingTimeout: number = 500) {
+	protected beforeEach: string;
+	protected afterEach: string;
+	protected registeredFunctions: Record<string, string> = {};
+
+	constructor (pingTimeout: number = 500, beforeEach: string = "", afterEach: string = "") {
 		this.pingTimeout = pingTimeout;
+		this.beforeEach = beforeEach;
+		this.afterEach = afterEach;
 
 		this.state = new State(true);
 	}
@@ -54,6 +60,7 @@ export default abstract class Lagoon {
 				if (response.data.error) {
 					reject(response.data.details);
 				} else {
+					this.registeredFunctions[name] = code;
 					resolve();
 				}
 			});

@@ -39,9 +39,21 @@ class BrowserWorker extends LagoonWorker {
 	setup (): void {
 		this.messageBus = new MessageBus(crypto.randomUUID, this.sendMessage);
 
+		this.messageBus.addEventListener("initialize", this.initialize.bind(this));
+
 		this.attachMessageBusHandles();
 
 		this.patchSync();
+	}
+
+	private initialize (msg: any) {
+		this.state = State.build(msg.data.state);
+		this.beforeEach = msg.data.beforeEach;
+		this.afterEach = msg.data.afterEach;
+
+		for (const name in msg.data.registeredFunctions) {
+			this.compiledFunctions[name] = this.compile(name, `${this.beforeEach}\n${msg.data.registeredFunctions[name]}\n${this.afterEach}`);
+		}
 	}
 
 	private sendMessage = (msg: any) => {

@@ -7,8 +7,8 @@ export default class BrowserLagoon extends Lagoon {
 	private iframe!: HTMLIFrameElement;
 	private token: string = "";
 
-	constructor (pingTimeout?: number) {
-		super(pingTimeout);
+	constructor (pingTimeout?: number, beforeEach?: string, afterEach?: string) {
+		super(pingTimeout, beforeEach, afterEach);
 
 		this.createWorker();
 	}
@@ -30,7 +30,12 @@ export default class BrowserLagoon extends Lagoon {
 
 		window.addEventListener("message", this.handleMessage);
 
-		this.sync();
+		this.messageBus.send("initialize", {
+			state: this.state.serialize(),
+			beforeEach: this.beforeEach,
+			afterEach: this.afterEach,
+			registeredFunctions: this.registeredFunctions
+		});
 
 		this.sendPing();
 	}

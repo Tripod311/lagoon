@@ -19,8 +19,8 @@ export default class NodeLagoon extends Lagoon {
 	}
 	private worker!: Worker;
 
-	constructor (pingTimeout?: number, resourceLimits?: ResourceLimits) {
-		super(pingTimeout);
+	constructor (pingTimeout?: number, resourceLimits?: ResourceLimits, beforeEach?: string, afterEach?: string) {
+		super(pingTimeout, beforeEach, afterEach);
 
 		if (resourceLimits) {
 			this.resourceLimits = resourceLimits;
@@ -33,7 +33,12 @@ export default class NodeLagoon extends Lagoon {
 		this.worker = new Worker(WorkerBundle, {
 			eval: true,
 			resourceLimits: this.resourceLimits,
-			workerData: this.state.serialize()
+			workerData: {
+				state: this.state.serialize(),
+				beforeEach: this.beforeEach,
+				afterEach: this.afterEach,
+				registeredFunctions: this.registeredFunctions
+			}
 		});
 		this.worker.on("error", this.workerError.bind(this));
 
