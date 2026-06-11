@@ -7,10 +7,16 @@ interface StateEntry {
 	[key: string]: StateEntry;
 }
 
+interface StatePatch {
+	update: Record<string, any>;
+	delete: string[];
+}
+
 export default class State {
 	private isMainState: boolean;
 	private value: Pump;
 	private diff: Record<string, { old: any; current: any; }> = {};
+	private deletedFields: Set<string> = new Set();
 	private fieldListeners: Record<string, PipeListener[]> = {};
 	private locked: boolean = false;
 
@@ -60,6 +66,16 @@ export default class State {
 		}
 	}
 
+	delete (fieldName: string) {
+		if (this.value.getPipe(fieldName)) {
+			this.value.removePipe(fieldName);
+
+			if (this.diff[fieldName]) delete this.diff[fieldName];
+
+			if (!this.locked) this.deletedFields.add(fieldName);
+		}
+	}
+
 	handleFieldChange (fieldName: string, newOutput: any, oldOutput: any) {
 		if (this.locked) return;
 		
@@ -71,6 +87,8 @@ export default class State {
 				old: oldOutput
 			}
 		}
+
+		if (this.deletedFields.has(fieldName)) this.deletedFields.delete(fieldName);
 
 		const listeners = this.fieldListeners[fieldName];
 
@@ -113,40 +131,56 @@ export default class State {
 		this.locked = false;
 	}
 
-	getPatch () {
-		const result: Record<string, any> = {};
+	getPatch (): StatePatch {
+		const result: StatePatch = {
+			update: {},
+			delete: Array.from(this.deletedFields)
+		};
 
 		for (const fieldName in this.diff) {
-			result[fieldName] = this.diff[fieldName].current;
+			result.update[fieldName] = this.diff[fieldName].current;
 		}
 
-		if (this.isMainState) this.diff = {};
+		if (this.isMainState) {
+			this.diff = {};
+			this.deletedFields.clear();
+		}
 
 		return result;
 	}
 
-	applyPatch (patch: Record<string, any>): Record<string, any> {
-		const correction: Record<string, any> = {};
+	applyPatch (patch: StatePatch): StatePatch {
+		const correction: StatePatch = {
+			update: {},
+			delete: []
+		};
 
 		this.locked = true;
 
 		if (this.isMainState) {
-			const changedFields = Object.keys(this.diff).concat(Object.keys(patch));
+			const changedFields = Object.keys(this.diff).concat(Object.keys(patch.update), patch.delete);
 
 			for (const field of changedFields) {
-				if (this.diff[field]) {
-					correction[field] = this.diff[field].current;
+				if (this.deletedFields.has(field)) {
+					correction.delete.push(field);
+				} else if (this.diff[field]) {
+					correction.update[field] = this.diff[field].current;
 				} else {
-					this.set(field, patch[field]);
+					this.set(field, patch.update[field]);
 				}
 			}
 		} else {
-			for (const field in patch) {
-				this.set(field, patch[field]);
+			for (const deleted of patch.delete) {
+				this.delete(deleted);
+			}
+
+			for (const field in patch.update) {
+				this.set(field, patch.update[field]);
 			}
 		}
 
 		this.diff = {};
+		this.deletedFields.clear();
 
 		this.locked = false;
 

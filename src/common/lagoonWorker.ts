@@ -14,6 +14,11 @@ interface QueuedCall {
 	reject: (err: any) => void;
 }
 
+export interface LogFunctions {
+	log: (data: any) => void,
+	error: (data: any) => void
+}
+
 export default abstract class LagoonWorker {
 	public state!: State;
 	public storage: Record<string, any> = {};
@@ -27,6 +32,11 @@ export default abstract class LagoonWorker {
 
 	protected beforeEach: string = "";
 	protected afterEach: string = "";
+
+	protected log: LogFunctions = {
+		log: console.log,
+		error: console.error
+	};
 
 	attachMessageBusHandles () {
 		this.messageBus.addEventListener("ping", this.ping.bind(this));
@@ -50,6 +60,8 @@ export default abstract class LagoonWorker {
 				error: false
 			});
 		} catch (err: any) {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -65,6 +77,8 @@ export default abstract class LagoonWorker {
 				error: false
 			});
 		} catch (err: any) {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -80,6 +94,8 @@ export default abstract class LagoonWorker {
 		try {
 			compiled = this.compile("generic", `${this.beforeEach}\n${msg.data.code}\n${this.afterEach}`);
 		} catch (err: any) {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -102,6 +118,8 @@ export default abstract class LagoonWorker {
 				error: false
 			});
 		}, (err: any) => {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -115,6 +133,8 @@ export default abstract class LagoonWorker {
 		const runId = msg.reqId;
 
 		if (!this.compiledFunctions[msg.data.name]) {
+			this.log.error(`Function ${msg.data.name} was not registered`);
+			
 			msg.response!({
 				error: true,
 				details: `Function ${msg.data.name} was not registered`
@@ -137,6 +157,8 @@ export default abstract class LagoonWorker {
 				error: false
 			});
 		}, (err: any) => {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -171,6 +193,8 @@ export default abstract class LagoonWorker {
 				error: false
 			});
 		}, (err: any) => {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -195,6 +219,8 @@ export default abstract class LagoonWorker {
 				data: result
 			});
 		} catch (err: any) {
+			this.log.error(err.toString());
+
 			msg.response!({
 				error: true,
 				details: err.toString()
@@ -220,7 +246,7 @@ export default abstract class LagoonWorker {
 					pr.then(() => {
 						// do nothing
 					}, (err: any) => {
-						console.log(`Ship callback error: ${err.toString()}`);
+						this.log.error(`Ship callback error: ${err.toString()}`);
 					});
 				}
 			});
@@ -232,6 +258,42 @@ export default abstract class LagoonWorker {
 			delete this.shipListeners[name];
 		} else {
 			this.shipListeners[name] = listener;
+		}
+	}
+
+	enqueue (fn: string | CompiledFunction, args: Record<string, any>, immediate: boolean = false) {
+		if (typeof fn === "string") {
+			if (!this.compiledFunctions[fn]) throw new Error(`Function ${fn} was not registered`);
+
+			fn = this.compiledFunctions[fn];
+		}
+
+		if (immediate) {
+			const pr = new Promise<string[]>((resolve, reject) => {
+				this.queue.unshift({
+					functions: [{ fn, args }],
+					policy: 'strict',
+					resolve,
+					reject
+				});
+			});
+
+			pr.catch((err: any) => {
+				this.log.error(`Enqueue error: ${err.toString()}`);
+			});
+		} else {
+			const pr = new Promise<string[]>((resolve, reject) => {
+				this.queue.push({
+					functions: [{ fn, args }],
+					policy: 'strict',
+					resolve,
+					reject
+				});
+			});
+
+			pr.catch((err: any) => {
+				this.log.error(`Enqueue error: ${err.toString()}`);
+			});
 		}
 	}
 

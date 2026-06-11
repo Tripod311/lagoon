@@ -2,22 +2,27 @@ import vm from "vm";
 import { parentPort, workerData } from "worker_threads"
 import { randomUUID } from "crypto"
 import LagoonWorker from "../common/lagoonWorker.js"
-import type { CompiledFunction } from "../common/lagoonWorker.js"
+import type { LogFunctions, CompiledFunction } from "../common/lagoonWorker.js"
 import MessageBus from "../common/messageBus.js"
 import State from "../common/state.js"
 
 class NodeWorker extends LagoonWorker {
 	private context: vm.Context;
 
-	constructor () {
+	constructor (log?: LogFunctions) {
 		super();
+
+		if (log) {
+			this.log = log;
+		}
 
 		this.setup();
 
 		this.context = vm.createContext({
 			Lagoon: {
 				state: this.state,
-				ship: this.ship.bind(this)
+				ship: this.ship.bind(this),
+				enqueue: this.enqueue.bind(this)
 			}
 		});
 
