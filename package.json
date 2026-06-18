@@ -1,6 +1,6 @@
 {
   "name": "@tripod311/lagoon",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Safe script execution context for browser and node",
   "keywords": [
     "ts"
