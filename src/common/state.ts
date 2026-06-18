@@ -25,7 +25,7 @@ export default class State {
 		this.value = new Pump();
 	}
 
-	set (fieldName: string, value: any) {
+	set (fieldName: string, value: any, silent: boolean = false) {
 		if (fieldName.length === 0) return;
 
 		const hops = fieldName.split('.');
@@ -53,7 +53,18 @@ export default class State {
 			}
 		}
 
+		const oldVal = (root as StoragePipe).data;
 		(root as StoragePipe).data = value;
+
+		if (!silent) {
+			const listeners = this.fieldListeners[fieldName];
+
+			if (listeners) {
+				for (const l of listeners) {
+					l(value, oldVal);
+				}
+			}
+		}
 	}
 
 	get (fieldName: string): any {
@@ -89,14 +100,6 @@ export default class State {
 		}
 
 		if (this.deletedFields.has(fieldName)) this.deletedFields.delete(fieldName);
-
-		const listeners = this.fieldListeners[fieldName];
-
-		if (listeners) {
-			for (const l of listeners) {
-				l(newOutput, oldOutput);
-			}
-		}
 	}
 
 	addFieldListener (fieldName: string, listener: PipeListener) {
