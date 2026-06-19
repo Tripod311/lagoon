@@ -24,7 +24,7 @@ export default class BrowserLagoon extends Lagoon {
 
 	    document.body.appendChild(this.iframe);
 
-		this.messageBus = new MessageBus(crypto.randomUUID, this.sendMessage);
+		this.messageBus = new MessageBus(() => crypto.randomUUID(), this.sendMessage);
 
 		this.attachMessageBusHandles();
 
