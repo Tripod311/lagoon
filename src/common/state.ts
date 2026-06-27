@@ -77,6 +77,12 @@ export default class State {
 		}
 	}
 
+	exists (fieldName: string): boolean {
+		const pipe = this.value.getPipe(fieldName);
+
+		return !!pipe;
+	}
+
 	delete (fieldName: string) {
 		if (this.value.getPipe(fieldName)) {
 			this.value.removePipe(fieldName);

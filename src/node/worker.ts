@@ -37,8 +37,9 @@ class NodeWorker extends LagoonWorker {
 		const wrappedCode = `
 			(async (args) => {
 				"use strict";
-
+				${this.beforeEach}
 				${code}
+				${this.afterEach}
 			})
 		`;
 
@@ -66,7 +67,7 @@ class NodeWorker extends LagoonWorker {
 		this.afterEach = workerData.afterEach || "";
 
 		for (const name in workerData.registeredFunctions) {
-			this.compiledFunctions[name] = this.compile(name, `${this.beforeEach}\n${workerData.registeredFunctions[name]}\n${this.afterEach}`);
+			this.compiledFunctions[name] = this.compile(name, `${workerData.registeredFunctions[name]}`);
 		}
 
 		this.messageBus = new MessageBus(randomUUID, (data: any) => {

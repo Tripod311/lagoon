@@ -6,6 +6,7 @@ import MessageBus from "../common/messageBus.js"
 export default class BrowserLagoon extends Lagoon {
 	private iframe!: HTMLIFrameElement;
 	private token: string = "";
+	private iframeURL: string = "";
 
 	constructor (pingTimeout?: number, beforeEach?: string, afterEach?: string) {
 		super(pingTimeout, beforeEach, afterEach);
@@ -17,42 +18,55 @@ export default class BrowserLagoon extends Lagoon {
 		this.token = crypto.randomUUID();
 		this.iframe = document.createElement("iframe");
 
-	    this.iframe.sandbox.add("allow-scripts");
+		this.iframe.sandbox.add("allow-scripts");
+		this.iframe.style.display = "none";
 
-	    this.iframe.style.display = "none";
-	    this.iframe.srcdoc = this.createHTML();
-
-	    document.body.appendChild(this.iframe);
-
-		this.messageBus = new MessageBus(() => crypto.randomUUID(), this.sendMessage);
+		this.messageBus = new MessageBus(() => crypto.randomUUID(), this.sendMessage, false);
+		this.messageBus.addEventListener("workerReady", this.onWorkerReady.bind(this));
 
 		this.attachMessageBusHandles();
 
 		window.addEventListener("message", this.handleMessage);
 
+	    const html = this.createHTML();
+
+		const blob = new Blob([html], {
+			type: "text/html;charset=utf-8"
+		});
+
+		this.iframeURL = URL.createObjectURL(blob);
+		this.iframe.src = this.iframeURL;
+
+		document.body.appendChild(this.iframe);
+	}
+
+	destroyWorker (): void {
+		this.messageBus.destructor();
+
+		this.iframe.onload = null;
+		
+		window.removeEventListener("message", this.handleMessage);
+	    this.iframe.remove();
+	    this.token = "";
+	    URL.revokeObjectURL(this.iframeURL);
+	}
+
+	onWorkerReady () {
 		this.messageBus.send("initialize", {
 			state: this.state.serialize(),
 			beforeEach: this.beforeEach,
 			afterEach: this.afterEach,
 			registeredFunctions: this.registeredFunctions
 		});
-
 		this.sendPing();
-	}
-
-	destroyWorker (): void {
-		this.messageBus.destructor();
-		
-		window.removeEventListener("message", this.handleMessage);
-	    this.iframe.remove();
-	    this.token = "";
+		this.messageBus.flush();
 	}
 
 	private handleMessage = (ev: MessageEvent) => {
 		const data = ev.data;
 
 		if (data.token !== this.token) return;
-
+		
 		this.messageBus.receive(data.message);
 	}
 

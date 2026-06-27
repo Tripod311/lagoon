@@ -34,6 +34,6 @@
     "url": "https://github.com/Tripod311/lagoon.git"
   },
   "dependencies": {
-    "@tripod311/pump": "^0.0.2"
+    "@tripod311/pump": "^0.0.3"
   }
 }

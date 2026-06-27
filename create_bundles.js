@@ -8,8 +8,9 @@ async function nodeBundle () {
         platform: "node",
         format: "iife",
         target: "node20",
-        minify: true,
-        write: false
+        minify: false,
+        write: false,
+        sourcemap: false
     });
 
     const code = result.outputFiles[0].text;
@@ -29,8 +30,9 @@ async function browserBundle () {
         platform: "browser",
         format: "iife",
         target: "es2020",
-        minify: true,
-        write: false
+        minify: false,
+        write: false,
+        sourcemap: false
     });
 
     const code = result.outputFiles[0].text;

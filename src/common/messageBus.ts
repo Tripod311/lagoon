@@ -19,12 +19,15 @@ export default class MessageBus extends Emitter {
 	private genId: () => string;
 	private sendFunction: (data: any) => void;
 	private pending: Record<string, MessageWaiter> = {};
+	private ready: boolean;
+	private queue: Message[] = [];
 
-	constructor (genId: () => string, sendFunction: (data: any) => void) {
+	constructor (genId: () => string, sendFunction: (data: any) => void, ready: boolean = true) {
 		super();
 
 		this.genId = genId;
 		this.sendFunction = sendFunction;
+		this.ready = ready;
 	}
 
 	destructor () {
@@ -72,12 +75,21 @@ export default class MessageBus extends Emitter {
 			}
 		}
 
-		this.sendFunction({
-			command: command,
-			data: data,
-			reqId: id,
-			isResponse: false
-		});
+		if (!this.ready) {
+			this.queue.push({
+				command: command,
+				data: data,
+				reqId: id,
+				isResponse: false
+			});
+		} else {
+			this.sendFunction({
+				command: command,
+				data: data,
+				reqId: id,
+				isResponse: false
+			});
+		}
 
 		return id;
 	}
@@ -112,5 +124,15 @@ export default class MessageBus extends Emitter {
 		if (this.pending[id]) {
 			clearTimeout(this.pending[id].timeout);
 		}
+	}
+
+	flush () {
+		this.ready = true;
+
+		for (const msg of this.queue) {
+			this.sendFunction(msg);
+		}
+
+		this.queue = [];
 	}
 }

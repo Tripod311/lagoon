@@ -71,7 +71,7 @@ export default abstract class LagoonWorker {
 
 	registerFunction (msg: Message) {
 		try {
-			this.compiledFunctions[msg.data.name] = this.compile(msg.data.name, `${this.beforeEach}\n${msg.data.code}\n${this.afterEach}`);
+			this.compiledFunctions[msg.data.name] = this.compile(msg.data.name, msg.data.code);
 
 			msg.response!({
 				error: false
@@ -92,7 +92,7 @@ export default abstract class LagoonWorker {
 		let compiled;
 
 		try {
-			compiled = this.compile("generic", `${this.beforeEach}\n${msg.data.code}\n${this.afterEach}`);
+			compiled = this.compile("generic", msg.data.code);
 		} catch (err: any) {
 			this.log.error(err.toString());
 
@@ -248,6 +248,8 @@ export default abstract class LagoonWorker {
 					}, (err: any) => {
 						this.log.error(`Ship callback error: ${err.toString()}`);
 					});
+
+					if (!this.processing) this.pullQueue();
 				}
 			});
 		});
@@ -276,6 +278,8 @@ export default abstract class LagoonWorker {
 					resolve,
 					reject
 				});
+
+				if (!this.processing) this.pullQueue();
 			});
 
 			pr.catch((err: any) => {
@@ -289,6 +293,8 @@ export default abstract class LagoonWorker {
 					resolve,
 					reject
 				});
+
+				if (!this.processing) this.pullQueue();
 			});
 
 			pr.catch((err: any) => {
