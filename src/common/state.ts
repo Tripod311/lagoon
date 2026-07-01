@@ -93,6 +93,16 @@ export default class State {
 		}
 	}
 
+	getNested (fieldName: string): string[] {
+		const pipe = this.value.getPipe(fieldName);
+
+		if (pipe) {
+			return pipe.nested;
+		} else {
+			return [];
+		}
+	}
+
 	handleFieldChange (fieldName: string, newOutput: any, oldOutput: any) {
 		if (this.locked) return;
 		
