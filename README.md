@@ -236,7 +236,7 @@ await lagoon.execute(`
 ```ts
 lagoon.execute(
   code: string,
-  args?: Record<string, any>,
+  args: Record<string, any>,
   timeout?: number
 ): Promise<void>
 ```
@@ -288,7 +288,7 @@ Runs a previously registered function.
 ```ts
 lagoon.run(
   name: string,
-  args?: Record<string, any>,
+  args: Record<string, any>,
   timeout?: number
 ): Promise<void>
 ```
@@ -323,7 +323,7 @@ If execution fails, all state changes from the batch are reverted.
 `policy` may be `"strict"` or `"loose"`.
 
 - `"strict"` is the default policy. Execution stops after the first function that throws an error, and the whole batch fails.
-- `"loose"` continues executing the remaining functions even if one of them throws. Promise will return array with errors occured.
+- `"loose"` continues executing the remaining functions even if one of them throws.
 
 #### Signature
 
@@ -331,7 +331,7 @@ If execution fails, all state changes from the batch are reverted.
 lagoon.runMany(
   list: Array<{
     name: string;
-    args?: Record<string, any>;
+    args: Record<string, any>;
   }>,
   policy: "strict" | "loose" = "strict",
   timeout?: number
@@ -378,7 +378,7 @@ These APIs are available both in the main environment and inside the isolated en
 
 ---
 
-### `lagoon.ship(name, payload, callback?, timeout?)`
+### `lagoon.ship(name, payload, timeout = 0, callback?)`
 
 `ship` is an additional communication channel that is independent from the main execution chain.
 

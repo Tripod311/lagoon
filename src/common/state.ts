@@ -235,7 +235,7 @@ export default class State {
 		const fill = (pipe: StoragePipe): StateEntry => {
 			const result: StateEntry = {};
 
-			if (pipe.data) result.__value = pipe.data;
+			if (pipe.data !== undefined) result.__value = pipe.data;
 
 			const nested = pipe.nested;
 
