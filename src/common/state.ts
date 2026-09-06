@@ -8,13 +8,17 @@ interface StateEntry {
 }
 
 type StatePatch = Record<string, any>;
+interface PatchNode {
+	patchValue?: any;
+	diffValue?: any;
+	children: Record<string, PatchNode>;
+}
 
 export default class State {
 	private isMainState: boolean;
 	private value: Pump;
-	private diff: Record<string, { old: any; current: any; }> = {};
+	private diff: Record<string, { old: any; current: any; }> = Object.create(null);
 	private fieldListeners: Record<string, PipeListener[]> = {};
-	private locked: boolean = false;
 
 	constructor (isMainState: boolean) {
 		this.isMainState = isMainState;
@@ -39,10 +43,58 @@ export default class State {
 		return node;
 	}
 
-	set (fieldName: string, value: any, silent: boolean = false) {
-		if (value === undefined) throw new Error("undefined is restricted value for set");
+	cleanupTree (node: Pump | StoragePipe<any>) {
+		const nested = node.nested;
 
-		if (fieldName.length === 0) return;
+		for (const name of nested) {
+			const child = node.getPipe(name) as StoragePipe<any>;
+
+			if (child.data === null) {
+				node.removePipe(name);
+			} else {
+				this.cleanupTree(child);
+			}
+		}
+	}
+
+	private recordDiff (
+		fieldName: string,
+		oldValue: any,
+		newValue: any
+	) {
+		const change = this.diff[fieldName];
+
+		if (change) {
+			change.current = structuredClone(newValue);
+
+			if (Object.is(change.old, newValue)) {
+				delete this.diff[fieldName];
+			}
+
+			return;
+		}
+
+		if (Object.is(oldValue, newValue)) return;
+
+		this.diff[fieldName] = {
+			old: structuredClone(oldValue),
+			current: structuredClone(newValue)
+		};
+	}
+
+	private isDescendant (
+		path: string,
+		parent: string
+	): boolean {
+		return path.startsWith(`${parent}.`);
+	}
+
+	private pathDepth (path: string): number {
+		return path.split(".").length;
+	}
+
+	set (fieldName: string, value: any, skipDiff: boolean = false) {
+		if (value === undefined) throw new Error("undefined is restricted value for set");
 
 		const hops = this.value.parsePath(fieldName);
 
@@ -50,9 +102,13 @@ export default class State {
 		let index = 0;
 		while (index < hops.length) {
 			const hop = hops[index];
-			const pipe: Pipe | null = root.getPipe(hop);
+			const pipe = root.getPipe(hop) as StoragePipe<any>;
 
 			if (pipe) {
+				if (pipe.data === null) {
+					pipe.data = true;
+					if (!skipDiff) this.recordDiff(pipe.fullPath.join('.'), null, true);
+				}
 				root = pipe;
 				index++;
 			} else {
@@ -65,21 +121,33 @@ export default class State {
 				const newPipe = new StoragePipe<any>();
 				newPipe.data = true;
 				root.addPipe(hops[i], newPipe);
-				newPipe.on(this.handleFieldChange.bind(this, newPipe.fullPath.join('.')));
 				root = newPipe;
+
+				if (!skipDiff) {
+					this.recordDiff(
+						root.fullPath.join("."),
+						null,
+						true
+					);
+				}
 			}
 		}
 
-		const oldVal = (root as StoragePipe).data;
-		(root as StoragePipe).data = value;
+		const oldVal = structuredClone((root as StoragePipe).data);
+		const newVal = structuredClone(value);
 
-		if (!silent) {
-			const listeners = this.fieldListeners[fieldName];
+		(root as StoragePipe).data = newVal;
 
-			if (listeners) {
-				for (const l of listeners) {
-					l(value, oldVal);
-				}
+		if (!skipDiff) this.recordDiff(fieldName, oldVal, newVal)
+
+		const listeners = this.fieldListeners[fieldName];
+
+		if (listeners) {
+			for (const l of listeners) {
+				l(
+					structuredClone(newVal),
+					structuredClone(oldVal)
+				);
 			}
 		}
 	}
@@ -90,7 +158,7 @@ export default class State {
 		if (pipe === null) {
 			return null;
 		} else {
-			return pipe.data;
+			return structuredClone(pipe.data);
 		}
 	}
 
@@ -105,30 +173,23 @@ export default class State {
 	}
 
 	delete (fieldName: string) {
-		this.set(fieldName, null, true);
+		const pipe = this.getPipeWithCheck(fieldName);
+
+		if (pipe !== null) {
+			this.set(fieldName, null);
+		}
 	}
 
 	getNested (fieldName: string): string[] {
 		const pipe = this.getPipeWithCheck(fieldName);
 
-		if (pipe === null) {
-			return [];
-		} else {
-			return pipe.nested;
-		}
-	}
+		if (!pipe) return [];
 
-	handleFieldChange (fieldName: string, newOutput: any, oldOutput: any) {
-		if (this.locked) return;
-		
-		if (this.diff[fieldName]) {
-			this.diff[fieldName].current = newOutput;
-		} else {
-			this.diff[fieldName] = {
-				current: newOutput,
-				old: oldOutput
-			}
-		}
+		return pipe.nested.filter(name => {
+			const child = pipe.getPipe(name) as StoragePipe<any>;
+
+			return child !== null && child.data !== null;
+		});
 	}
 
 	addFieldListener (fieldName: string, listener: PipeListener) {
@@ -151,90 +212,11 @@ export default class State {
 		}
 	}
 
-	reset () {
-		this.locked = true;
-
-		try {
-			for (const fieldName in this.diff) {
-				this.set(fieldName, this.diff[fieldName].old);
-			}
-
-			this.diff = {};
-		} catch (err: any) {
-			console.error(err);
-		} finally {
-			this.locked = false;
-		}
-	}
-
-	getPatch (): StatePatch {
-		const result: StatePatch = {};
-
-		for (const fieldName in this.diff) {
-			result[fieldName] = this.diff[fieldName].current;
-			if (this.diff[fieldName].current === null) {
-				try {
-					this.value.removePipeAt(fieldName)
-				} catch (err: any) {
-					// do nothing, pipe already removed
-				}
-			}
-		}
-
-		this.diff = {};
-
-		return result;
-	}
-
-	applyPatch (patch: StatePatch): StatePatch {
-		const correction: StatePatch = {};
-
-		this.locked = true;
-
-		if (this.isMainState) {
-			const changedFields = Object.keys(this.diff).concat(Object.keys(patch)).sort();
-
-			for (const field of changedFields) {
-				if (this.diff[field]) {
-					correction[field] = this.diff[field].current;
-				} else {
-					if (patch[field] === null) {
-						try {
-							this.value.removePipeAt(field)
-						} catch (err: any) {
-							// do nothing, pipe already removed
-						}
-					} else {
-						this.set(field, patch[field]);
-					}
-				}
-			}
-		} else {
-			for (const field in patch) {
-				if (patch[field] === null) {
-					try {
-						this.value.removePipeAt(field)
-					} catch (err: any) {
-						// do nothing, pipe already removed
-					}
-				} else {
-					this.set(field, patch[field]);
-				}
-			}
-		}
-
-		this.diff = {};
-
-		this.locked = false;
-
-		return correction;
-	}
-
 	static build (base: Record<string, StateEntry>): State {
 		const result = new State(false);
 
 		const fill = (path: string[], entry: StateEntry) => {
-			if (entry.__value !== undefined) result.set(path.join('.'), entry.__value);
+			if (entry.__value !== undefined) result.set(path.join('.'), entry.__value, true);
 
 			for (const sub in entry) {
 				if (sub === "__value") continue;
@@ -254,26 +236,354 @@ export default class State {
 	}
 
 	serialize (): Record<string, StateEntry> {
-		const result: Record<string, StateEntry> = {};
+		const result: Record<string, StateEntry> =
+			Object.create(null);
 
-		const fill = (pipe: StoragePipe): StateEntry => {
-			const result: StateEntry = {};
+		const fill = (
+			pipe: StoragePipe<any>
+		): StateEntry | null => {
+			if (pipe.data === null) return null;
 
-			if (pipe.data !== undefined) result.__value = pipe.data;
+			const entry: StateEntry =
+				Object.create(null);
 
-			const nested = pipe.nested;
-
-			for (const name of nested) {
-				result[name] = fill((pipe.getPipe(name) as StoragePipe));
+			if (pipe.data !== undefined) {
+				entry.__value = pipe.data;
 			}
 
-			return result;
-		}
+			for (const name of pipe.nested) {
+				const child = pipe.getPipe(name);
+
+				if (!child) continue;
+
+				const childEntry = fill(
+					child as StoragePipe<any>
+				);
+
+				if (childEntry !== null) {
+					entry[name] = childEntry;
+				}
+			}
+
+			return entry;
+		};
 
 		for (const name of this.value.nested) {
-			result[name] = fill((this.value.getPipe(name) as StoragePipe));
+			const pipe = this.value.getPipe(name);
+
+			if (!pipe) continue;
+
+			const entry = fill(
+				pipe as StoragePipe<any>
+			);
+
+			if (entry !== null) {
+				result[name] = entry;
+			}
 		}
 
 		return result;
+	}
+
+	reset () {
+		const fields = Object.keys(this.diff).sort(
+			(first, second) =>
+				this.pathDepth(second) -
+				this.pathDepth(first)
+		);
+
+		for (const fieldName of fields) {
+			this.set(
+				fieldName,
+				this.diff[fieldName].old,
+				true
+			);
+		}
+
+		this.cleanupTree(this.value);
+		this.diff = Object.create(null);
+	}
+
+	getPatch (): StatePatch {
+		const result: StatePatch =
+			Object.create(null);
+
+		const fields = Object.keys(this.diff).sort(
+			(first, second) =>
+				this.pathDepth(first) -
+				this.pathDepth(second)
+		);
+
+		const deletedRoots: string[] = [];
+
+		for (const fieldName of fields) {
+			const coveredByDeletion = deletedRoots.some(parent =>
+				this.isDescendant(fieldName, parent)
+			);
+
+			if (coveredByDeletion) continue;
+
+			const value = this.diff[fieldName].current;
+
+			result[fieldName] = structuredClone(value);
+
+			if (value === null) {
+				deletedRoots.push(fieldName);
+			}
+		}
+
+		return result;
+	}
+
+	applyPatch (patch: StatePatch): StatePatch {
+		const correction: StatePatch =
+			Object.create(null);
+
+		const patchFields = Object.keys(patch);
+
+		/*
+		 * Validate the complete patch before changing state.
+		 */
+		for (const field of patchFields) {
+			this.value.parsePath(field);
+
+			if (patch[field] === undefined) {
+				throw new Error(
+					`Patch contains undefined value for "${field}"`
+				);
+			}
+		}
+
+		/*
+		 * A deletion must cover the complete subtree.
+		 * A patch containing both `user: null` and
+		 * `user.name: value` is contradictory.
+		 */
+		for (const field of patchFields) {
+			if (patch[field] !== null) continue;
+
+			const conflictingChild = patchFields.find(other =>
+				this.isDescendant(other, field)
+			);
+
+			if (conflictingChild) {
+				throw new Error(
+					`Patch modifies "${conflictingChild}" ` +
+					`inside deleted node "${field}"`
+				);
+			}
+		}
+
+		if (this.isMainState) {
+			this.applyPatchMain(patch, correction);
+		} else {
+			this.applyPatchWorker(patch);
+		}
+
+		this.diff = Object.create(null);
+		this.cleanupTree(this.value);
+
+		return correction;
+	}
+
+	private buildPatchTree (
+		patch: StatePatch
+	): PatchNode {
+		const root: PatchNode = {
+			children: Object.create(null)
+		};
+
+		const changedFields = new Set([
+			...Object.keys(this.diff),
+			...Object.keys(patch)
+		]);
+
+		for (const fieldName of changedFields) {
+			const hops = this.value.parsePath(fieldName);
+
+			let node = root;
+
+			for (let index = 0; index < hops.length; index++) {
+				const hop = hops[index];
+				const nodePath = hops
+					.slice(0, index + 1)
+					.join(".");
+
+				if (!node.children[hop]) {
+					node.children[hop] = {
+						patchValue: patch[nodePath],
+						diffValue:
+							this.diff[nodePath]?.current,
+						children: Object.create(null)
+					};
+				}
+
+				node = node.children[hop];
+			}
+		}
+
+		return root;
+	}
+
+	private hasDiffInSubtree (
+		node: PatchNode
+	): boolean {
+		if (node.diffValue !== undefined) {
+			return true;
+		}
+
+		return Object.values(node.children).some(child =>
+			this.hasDiffInSubtree(child)
+		);
+	}
+
+	private collectDiffCorrections (
+		fullName: string,
+		node: PatchNode,
+		correction: StatePatch
+	) {
+		if (node.diffValue !== undefined) {
+			correction[fullName] =
+				structuredClone(node.diffValue);
+
+			if (node.diffValue === null) {
+				return;
+			}
+		}
+
+		for (const childName of Object.keys(node.children)) {
+			this.collectDiffCorrections(
+				`${fullName}.${childName}`,
+				node.children[childName],
+				correction
+			);
+		}
+	}
+
+	private applyPatchMain (
+		patch: StatePatch,
+		correction: StatePatch
+	) {
+		const patchTree = this.buildPatchTree(patch);
+
+		const apply = (
+			fullName: string,
+			node: PatchNode
+		) => {
+			/*
+			 * Main deleted this node. Main always wins,
+			 * so worker receives the deletion and the
+			 * complete subtree is skipped.
+			 */
+			if (node.diffValue === null) {
+				correction[fullName] = null;
+				return;
+			}
+
+			/*
+			 * Worker wants to delete this subtree.
+			 */
+			if (node.patchValue === null) {
+				if (this.hasDiffInSubtree(node)) {
+					/*
+					 * Something inside the subtree was
+					 * changed by main. Reject the worker's
+					 * deletion and restore the root value
+					 * in worker.
+					 */
+					const current =
+						this.getPipeWithCheck(fullName);
+
+					if (!current) {
+						throw new Error(
+							`Cannot restore state node "${fullName}"`
+						);
+					}
+
+					correction[fullName] =
+						structuredClone(current.data);
+
+					this.collectDiffCorrections(
+						fullName,
+						node,
+						correction
+					);
+				} else {
+					/*
+					 * Main did not touch this subtree, so
+					 * worker's deletion can be applied.
+					 */
+					const current =
+						this.getPipeWithCheck(fullName);
+
+					if (current) {
+						this.set(fullName, null, true);
+					}
+				}
+
+				return;
+			}
+
+			const hasDiff =
+				node.diffValue !== undefined;
+
+			const hasPatch =
+				node.patchValue !== undefined;
+
+			if (hasDiff) {
+				/*
+				 * Exact conflict or a main-only change:
+				 * main value is authoritative.
+				 */
+				correction[fullName] =
+					structuredClone(node.diffValue);
+			} else if (hasPatch) {
+				/*
+				 * Worker-only change.
+				 */
+				this.set(
+					fullName,
+					node.patchValue,
+					true
+				);
+			}
+
+			for (const childName of Object.keys(node.children)) {
+				apply(
+					`${fullName}.${childName}`,
+					node.children[childName]
+				);
+			}
+		};
+
+		for (const name of Object.keys(patchTree.children)) {
+			apply(
+				name,
+				patchTree.children[name]
+			);
+		}
+	}
+
+	private applyPatchWorker (patch: StatePatch) {
+		const fields = Object.keys(patch).sort(
+			(first, second) =>
+				this.pathDepth(first) -
+				this.pathDepth(second)
+		);
+
+		for (const field of fields) {
+			if (
+				patch[field] === null &&
+				this.getPipeWithCheck(field) === null
+			) {
+				continue;
+			}
+
+			this.set(
+				field,
+				patch[field],
+				true
+			);
+		}
 	}
 }
