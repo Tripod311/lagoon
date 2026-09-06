@@ -335,7 +335,7 @@ lagoon.runMany(
   }>,
   policy: "strict" | "loose" = "strict",
   timeout?: number
-): Promise<string[]>
+): Promise<void>
 ```
 
 If the batch fails, times out, or cannot be executed, the returned promise is rejected.
