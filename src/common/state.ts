@@ -7,16 +7,12 @@ interface StateEntry {
 	[key: string]: StateEntry;
 }
 
-interface StatePatch {
-	update: Record<string, any>;
-	delete: string[];
-}
+type StatePatch = Record<string, any>;
 
 export default class State {
 	private isMainState: boolean;
 	private value: Pump;
 	private diff: Record<string, { old: any; current: any; }> = {};
-	private deletedFields: Set<string> = new Set();
 	private fieldListeners: Record<string, PipeListener[]> = {};
 	private locked: boolean = false;
 
@@ -25,10 +21,30 @@ export default class State {
 		this.value = new Pump();
 	}
 
+	getPipeWithCheck (fieldName: string): StoragePipe<any> | null {
+		const hops = this.value.parsePath(fieldName);
+
+		if (this.value.getPipe(hops[0]) === null) return null;
+
+		let node = this.value.getPipe(hops[0]) as StoragePipe<any>;
+
+		if (node === null || node.data === null) return null;
+
+		for (let i=1; i<hops.length; i++) {
+			node = node.getPipe(hops[i]) as StoragePipe<any>;
+
+			if (node === null || node.data === null) return null;
+		}
+
+		return node;
+	}
+
 	set (fieldName: string, value: any, silent: boolean = false) {
+		if (value === undefined) throw new Error("undefined is restricted value for set");
+
 		if (fieldName.length === 0) return;
 
-		const hops = fieldName.split('.');
+		const hops = this.value.parsePath(fieldName);
 
 		let root: Pump | Pipe = this.value;
 		let index = 0;
@@ -47,6 +63,7 @@ export default class State {
 		if (index < hops.length) {
 			for (let i=index; i<hops.length; i++) {
 				const newPipe = new StoragePipe<any>();
+				newPipe.data = true;
 				root.addPipe(hops[i], newPipe);
 				newPipe.on(this.handleFieldChange.bind(this, newPipe.fullPath.join('.')));
 				root = newPipe;
@@ -68,38 +85,36 @@ export default class State {
 	}
 
 	get (fieldName: string): any {
-		const pipe = this.value.getPipe(fieldName);
+		const pipe = this.getPipeWithCheck(fieldName);
 
-		if (pipe) {
-			return (pipe as StoragePipe).data;
-		} else {
+		if (pipe === null) {
 			return null;
+		} else {
+			return pipe.data;
 		}
 	}
 
 	exists (fieldName: string): boolean {
-		const pipe = this.value.getPipe(fieldName);
+		const pipe = this.getPipeWithCheck(fieldName);
 
-		return !!pipe;
-	}
-
-	delete (fieldName: string) {
-		if (this.value.getPipe(fieldName)) {
-			this.value.removePipe(fieldName);
-
-			if (this.diff[fieldName]) delete this.diff[fieldName];
-
-			if (!this.locked) this.deletedFields.add(fieldName);
+		if (pipe === null) {
+			return false;
+		} else {
+			return true;
 		}
 	}
 
-	getNested (fieldName: string): string[] {
-		const pipe = this.value.getPipe(fieldName);
+	delete (fieldName: string) {
+		this.set(fieldName, null, true);
+	}
 
-		if (pipe) {
-			return pipe.nested;
-		} else {
+	getNested (fieldName: string): string[] {
+		const pipe = this.getPipeWithCheck(fieldName);
+
+		if (pipe === null) {
 			return [];
+		} else {
+			return pipe.nested;
 		}
 	}
 
@@ -114,8 +129,6 @@ export default class State {
 				old: oldOutput
 			}
 		}
-
-		if (this.deletedFields.has(fieldName)) this.deletedFields.delete(fieldName);
 	}
 
 	addFieldListener (fieldName: string, listener: PipeListener) {
@@ -141,65 +154,76 @@ export default class State {
 	reset () {
 		this.locked = true;
 
-		for (const fieldName in this.diff) {
-			this.set(fieldName, this.diff[fieldName].old);
+		try {
+			for (const fieldName in this.diff) {
+				this.set(fieldName, this.diff[fieldName].old);
+			}
+
+			this.diff = {};
+		} catch (err: any) {
+			console.error(err);
+		} finally {
+			this.locked = false;
 		}
-
-		this.diff = {};
-
-		this.locked = false;
 	}
 
 	getPatch (): StatePatch {
-		const result: StatePatch = {
-			update: {},
-			delete: Array.from(this.deletedFields)
-		};
+		const result: StatePatch = {};
 
 		for (const fieldName in this.diff) {
-			result.update[fieldName] = this.diff[fieldName].current;
+			result[fieldName] = this.diff[fieldName].current;
+			if (this.diff[fieldName].current === null) {
+				try {
+					this.value.removePipeAt(fieldName)
+				} catch (err: any) {
+					// do nothing, pipe already removed
+				}
+			}
 		}
 
-		if (this.isMainState) {
-			this.diff = {};
-			this.deletedFields.clear();
-		}
+		this.diff = {};
 
 		return result;
 	}
 
 	applyPatch (patch: StatePatch): StatePatch {
-		const correction: StatePatch = {
-			update: {},
-			delete: []
-		};
+		const correction: StatePatch = {};
 
 		this.locked = true;
 
 		if (this.isMainState) {
-			const changedFields = Object.keys(this.diff).concat(Object.keys(patch.update), patch.delete);
+			const changedFields = Object.keys(this.diff).concat(Object.keys(patch)).sort();
 
 			for (const field of changedFields) {
-				if (this.deletedFields.has(field)) {
-					correction.delete.push(field);
-				} else if (this.diff[field]) {
-					correction.update[field] = this.diff[field].current;
+				if (this.diff[field]) {
+					correction[field] = this.diff[field].current;
 				} else {
-					this.set(field, patch.update[field]);
+					if (patch[field] === null) {
+						try {
+							this.value.removePipeAt(field)
+						} catch (err: any) {
+							// do nothing, pipe already removed
+						}
+					} else {
+						this.set(field, patch[field]);
+					}
 				}
 			}
 		} else {
-			for (const deleted of patch.delete) {
-				this.delete(deleted);
-			}
-
-			for (const field in patch.update) {
-				this.set(field, patch.update[field]);
+			for (const field in patch) {
+				if (patch[field] === null) {
+					try {
+						this.value.removePipeAt(field)
+					} catch (err: any) {
+						// do nothing, pipe already removed
+					}
+				} else {
+					this.set(field, patch[field]);
+				}
 			}
 		}
 
 		this.diff = {};
-		this.deletedFields.clear();
 
 		this.locked = false;
 
