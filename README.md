@@ -300,7 +300,7 @@ If the function throws, times out, or cannot be executed, the returned promise i
 ### `lagoon.runMany(list, policy?, timeout?)`
 
 ```ts
-const errors = await lagoon.runMany([
+await lagoon.runMany([
   {
     name: "increment",
     args: { step: 1 },
@@ -310,8 +310,6 @@ const errors = await lagoon.runMany([
     args: { value: 10 },
   },
 ], "strict", 1000);
-
-console.log(`Batch execution errors: ${errors.join('\n')}`)
 ```
 
 Runs several previously registered functions in one transaction.
